@@ -2,7 +2,7 @@
 //https://github.com/Proxmark/proxmark3
 #ifndef RFID_H
 #define RFID_H
-#include <array>
+//#include <array>
 #include <Arduino.h>
 #define DELAYVAL 384  // 384 //standard delay for manchster decode
 #define TIMEOUT 10000 // standard timeout for manchester decode at  160mhz is 1000000
@@ -19,7 +19,7 @@ public:
     void Init();
     RfidResult ReadTag(uint8_t address);
     RfidResult WriteTag(uint8_t address, uint32_t data);
-    std::array<uint32_t,15> DumpTag();
+    //std::array<uint32_t,15> DumpTag();
     double calcResonantFreq();
     Em4095(byte shd,byte mod, byte demodOut,byte rdyClk);
 
@@ -46,6 +46,9 @@ private:
     void SendForward(uint8_t fwd_bit_count, bool fast);
     void EM4xLoginEx(uint32_t pwd);
     void EM4xLogin(uint32_t pwd);
+	#ifndef ESP8266
+	static void onClk();
+	#endif
     void EM4xReadWord(uint8_t addr, uint32_t pwd, uint8_t usepwd);
     void EM4xProtectWord(uint32_t data, uint32_t pwd, uint8_t usepwd);
     void EM4xWriteWord(uint8_t addr, uint32_t data, uint32_t pwd, uint8_t usepwd);

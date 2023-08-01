@@ -5,11 +5,7 @@ volatile unsigned int clkCount = 0;
 volatile bool lastEdgeWasFalling = false;\
 
 // some defines to make copy pasted code from proxmark function
-bool g_debugMode = false;
-#define prnt(s) ESP_LOGI(RF_TAG, s)
-#define prnt(s, v) ESP_LOGI(RF_TAG, s, v)
-#define PrintAndLog2(f, v) ESP_LOGI(RF_TAG, f, v)
-#define PrintAndLog(f) ESP_LOGI(RF_TAG, f)
+bool g_debugMode = true;
 #define WaitUS delayMicroseconds
 //-----------------------------------
 // EM4469 / EM4305 routines
@@ -129,7 +125,11 @@ void Em4095::Disable()
 {
     digitalWrite(shd, HIGH);
 }
+#ifdef ESP8266
 void IRAM_ATTR onClk()
+#else
+static void Em4095::onClk()
+#endif
 {
     clkCount++;
 }
@@ -151,8 +151,10 @@ bool Em4095::preambleSearchEx(uint8_t *BitStream, uint8_t *preamble, size_t pLen
             foundCnt++;
             if (foundCnt == 1)
             {
-                if (g_debugMode)
-                    prnt("DEBUG: preamble found at %u", idx);
+                if (g_debugMode) {
+                    Serial.print("DEBUG: preamble found at");
+					Serial.println(idx); 
+					}
                 *startIdx = idx;
                 if (findone)
                     return true;
@@ -411,20 +413,21 @@ RfidResult Em4095::ReadTag(uint8_t address)
     RecordFromAntenna(127);
     // attempt to find a response
     uint32_t data;
-        RfidResult result;
+    RfidResult result;
 
     if (EM4x05testDemodReadData(&data, true))
     {
-        //ESP_LOGI(RF_TAG, "READ COMPLETE %x", result);
         result.data=data;
         result.error=false;
+        Serial.print("READ COMPLETE ");
+		Serial.println(result.error);
         return result;
     }
     result.error=true;
     result.data=0;
     return result;
 }
-    std::array<uint32_t,15> Em4095::DumpTag(){
+    /*std::array<uint32_t,15> Em4095::DumpTag(){
         std::array<uint32_t,15> data{0};
         for(int i=0; i<data.size();i++){
             if(i!=2||i!=14||i!=15){
@@ -433,7 +436,7 @@ RfidResult Em4095::ReadTag(uint8_t address)
             WaitUS(400);
         }
         return data;
-    }
+    }*/
 
 // set the demod buffer with given array of binary (one bit per byte)
 // by marshmellow
@@ -477,8 +480,10 @@ bool Em4095::EM4x05testDemodReadData(uint32_t *word, bool readCmd)
     // test preamble
     if (!preambleSearchEx(DemodBuffer, preamble, sizeof(preamble), &size, &startIdx, true))
     {
-        if (g_debugMode)
-            PrintAndLog2("DEBUG: Error - EM4305 preamble not found :: %d", startIdx);
+        if (g_debugMode){
+            Serial.print("DEBUG: Error - EM4305 preamble not found :: ");
+			Serial.println(startIdx);
+		}
         return false;
     }
     // if this is a readword command, get the read bytes and test the parities
@@ -488,14 +493,14 @@ bool Em4095::EM4x05testDemodReadData(uint32_t *word, bool readCmd)
          if (!EM_EndParityTest(DemodBuffer + startIdx + sizeof(preamble), 45, 5, 9, 0))
         {
             if (g_debugMode)
-                PrintAndLog("DEBUG: Error - End Parity check failed");
+                Serial.println("DEBUG: Error - End Parity check failed");
             return false;
         }
         //test for even parity bits and remove them. (leave out the end row of parities so 36 bits)
         if (removeParity(DemodBuffer, startIdx + sizeof(preamble), 9, 0, 36) == 0)
         {
             if (g_debugMode)
-                PrintAndLog("DEBUG: Error - Parity not detected");
+                Serial.println("DEBUG: Error - Parity not detected");
             return false;
         }
 
@@ -514,7 +519,7 @@ void Em4095::Init()
     pinMode(rdyClk, INPUT);
     digitalWrite(mod, LOW);
     // todo only attach on read command dont want to affect timming while sending commands
-    attachInterrupt(rdyClk, onClk, RISING);
+    attachInterrupt(digitalPinToInterrupt(rdyClk), onClk, RISING);
 }
 Em4095::Em4095(byte shd,byte mod, byte demodOut,byte rdyClk){
     this->shd=shd;
@@ -524,7 +529,8 @@ Em4095::Em4095(byte shd,byte mod, byte demodOut,byte rdyClk){
 }
 
 void Em4095::RecordFromAntenna(uint32_t numberOfBits)
-{
+{   //Not working, need rework
+    //TODO: Rework to interrupt
     if (numberOfBits > MAX_DEMOD_BUF_LEN)
     {
         return;
@@ -543,8 +549,7 @@ void Em4095::RecordFromAntenna(uint32_t numberOfBits)
     {
         DemodBuffer[i] = digitalRead(demodOut);
         clkCount = 0;
-        while (clkCount < 64)
-            ;
+        while (clkCount < 64);
     }
     DemodBufferLen = numberOfBits;
     //print raw buffer
